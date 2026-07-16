@@ -176,21 +176,57 @@ VALUES ('A', 'B'),
 
 -- Task. Treating roads as undirected, use a recursive CTE to return the smallest number of hops
 -- from city 'A' to every reachable city. Guard against cycles.
-WITH RECURSIVE routes(start, dest, hop, visited) AS
+WITH RECURSIVE undirected(a, b) AS
     (
-        SELECT a, b, 1, ARRAY[a, b]
-        FROM roads
-        WHERE a = 'A'
+        SELECT a, b FROM roads
+                    UNION
+        SELECT b, a FROM roads
+    ),
+    routes(dest, hop, visited) AS
+                   (SELECT 'A', 0, ARRAY['A']
 
-        UNION
+                    UNION ALL
 
-        SELECT b, a, 1, ARRAY[a, b]
-        FROM roads
-        WHERE a = 'A'
+                    SELECT u.b, r.hop + 1, visited || u.b
+                    FROM routes r
+                    JOIN undirected u
+                    ON r.dest = u.a
+                    WHERE NOT (u.b = ANY(r.visited))
+                    )
+SELECT dest, MIN(hop) AS fewest_hops
+FROM routes
+GROUP BY dest
+ORDER BY fewest_hops, dest;
 
---         UNION ALL
+
+-- RC10 · Threaded comments
+-- Setup.
+CREATE TABLE comments
+(
+    id        int PRIMARY KEY,
+    parent_id int,
+    author    text,
+    body      text
+);
+INSERT INTO comments
+VALUES (1, NULL, 'Ana', 'Original post'),
+       (2, 1, 'Ben', 'I agree'),
+       (3, 1, 'Cy', 'Not sure'),
+       (4, 2, 'Ana', 'Thanks'),
+       (5, 3, 'Ben', 'Why?');
 
 
-    )
-SELECT *
-FROM routes;
+-- Task. Using a recursive CTE, print the whole comment thread in reply order, each comment indented according to its depth.
+WITH RECURSIVE comment_reply(id, parent_id, author, body, depth) AS
+    (
+        SELECT id, parent_id, author, body, 0 FROM comments WHERE parent_id IS NULL
+
+        UNION ALL
+
+        SELECT c.id, c.parent_id, c.author, c.body, cr.depth + 1
+        FROM comments c
+        JOIN comment_reply cr
+        ON c.parent_id = cr.id
+
+    ) SEARCH DEPTH FIRST  BY id SET ordercol
+SELECT id, parent_id, author, REPEAT(' ', depth + 1) || body, depth FROM comment_reply ORDER BY ordercol;

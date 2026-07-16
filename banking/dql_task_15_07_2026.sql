@@ -1,7 +1,32 @@
 -- B1 · Overdraft moments
 -- Task. Find every withdrawal whose amount exceeded the account balance available at that instant
 -- (the running balance from all earlier transactions on that account).
+WITH transact_operations(account_id, signed_amount, created_at) AS
+         (SELECT from_account_id,
+                 -amount AS signed_amount,
+                 created_at
+          FROM transactions
+          WHERE type = 'withdrawal' OR type = 'transfer'
 
+          UNION ALL
+
+          SELECT to_account_id,
+                 amount,
+                 created_at
+          FROM transactions
+          WHERE type = 'transfer' OR type = 'deposit')
+SELECT a.account_number, t1.created_at, t1.amount, COALESCE((SELECT SUM(signed_amount)
+                FROM transact_operations t2
+                WHERE t1.from_account_id = t2.account_id
+                  AND t2.created_at < t1.created_at), 0) AS balance_before
+FROM transactions t1
+JOIN accounts a
+ON a.account_id = t1.from_account_id
+WHERE t1.type = 'withdrawal'
+  AND amount > COALESCE((SELECT SUM(signed_amount)
+                FROM transact_operations t2
+                WHERE t1.from_account_id = t2.account_id
+                  AND t2.created_at < t1.created_at), 0);
 
 -- B2 · Multi-currency customers
 -- Task. Find customers who hold accounts in more than one currency. Count only the active ones
@@ -155,19 +180,17 @@ WHERE is_active
 
 -- B9 · Shared national IDs
 -- Task. Find national IDs held by more than one customer, then list the specific customer pairs sharing each ID.
-WITH RECURSIVE duplication_national_ids AS (
-SELECT c.customer_id, c.first_name, c.last_name, national_id
-FROM customers c
-JOIN (SELECT national_id
-      FROM customers
-      GROUP BY national_id
-      HAVING COUNT(*) > 1) AS rn
-USING (national_id)
-)
+WITH RECURSIVE duplication_national_ids AS (SELECT c.customer_id, c.first_name, c.last_name, national_id
+                                            FROM customers c
+                                                     JOIN (SELECT national_id
+                                                           FROM customers
+                                                           GROUP BY national_id
+                                                           HAVING COUNT(*) > 1) AS rn
+                                                          USING (national_id))
 SELECT *
 FROM duplication_national_ids d1
-JOIN duplication_national_ids d2
-USING (national_id)
+         JOIN duplication_national_ids d2
+              USING (national_id)
 WHERE d1.customer_id < d2.customer_id;
 
 -- B10 · Used every transaction type
