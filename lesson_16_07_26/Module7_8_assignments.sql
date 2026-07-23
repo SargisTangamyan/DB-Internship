@@ -609,7 +609,7 @@ ORDER BY country_count DESC;
 --      continent (SUM OVER), and its percentage share of that total.
 CREATE OR REPLACE VIEW view_4_1 AS
 SELECT *,
-       population / continent_population AS population_percentage_share
+       ROUND(population * 100.0 / continent_population, 2) AS population_percentage_share
 FROM (SELECT country_id,
              name,
              continent,
